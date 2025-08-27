@@ -118,8 +118,6 @@
         // Global error handler for debugging
         window.onerror = function(message, source, lineno, colno, error) {
             console.error("Caught a global error:", { message, source, lineno, colno, error });
-            // You could also display a user-friendly message here
-            // alert("حدث خطأ غير متوقع. يرجى مراجعة وحدة التحكم للمزيد من التفاصيل.");
             return true; // Prevent default error handling
         };
 
@@ -191,23 +189,20 @@
         // --- State ---
         let currentUser = {};
         let countdownInterval;
-        
+        let developerClickCount = 0;
+        let lastDeveloperClickTime = 0;
+        const DEVELOPER_CLICK_THRESHOLD = 5;
+        const DEVELOPER_CLICK_RESET_TIME = 500; // ms
+
         // --- Gemini API ---
         const GEMINI_API_KEY = "AIzaSyCGFVrYMLKKGD6n2cw_zfzDMNaM8Q0TOI8"; // Updated with provided API key
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
 
         async function callGeminiAPI(prompt) {
-            // Check if the API key is not provided by the environment
-            if (!GEMINI_API_KEY && typeof __api_key__ === 'undefined') {
+            if (!GEMINI_API_KEY) {
                 return "يرجى التأكد من أن مفتاح API الخاص بـ Gemini متاح لتفعيل المساعد.";
             }
             
-            const apiKeyToUse = GEMINI_API_KEY || (typeof __api_key__ !== 'undefined' ? __api_key__ : '');
-
-            if (!apiKeyToUse) {
-                return "مفتاح Gemini API غير متاح. يرجى التأكد من توفيره.";
-            }
-
             try {
                 const response = await fetch(GEMINI_API_URL, {
                     method: 'POST',
@@ -513,6 +508,48 @@
                 }
             });
         }
+
+        // --- Developer Feature: 5 continuous clicks on progress bar to skip day ---
+        if (progressBar) {
+            progressBar.addEventListener('click', () => {
+                const now = Date.now();
+                if (now - lastDeveloperClickTime < DEVELOPER_CLICK_RESET_TIME) {
+                    developerClickCount++;
+                } else {
+                    developerClickCount = 1; // Reset if not continuous
+                }
+                lastDeveloperClickTime = now;
+
+                if (developerClickCount >= DEVELOPER_CLICK_THRESHOLD) {
+                    console.log("Developer shortcut activated: Skipping to next task!");
+                    developerClickCount = 0; // Reset count after activation
+
+                    if (currentUser && currentUser.currentDay <= 30) {
+                        // Mark current day as completed (or failed, for demo purposes here let's complete)
+                        const dayIndex = currentUser.currentDay - 1;
+                        if (currentUser.dayStatus[dayIndex] === 'pending') {
+                           currentUser.dayStatus[dayIndex] = 'completed'; // Auto-complete for skip
+                           currentUser.score += currentUser.challengeTasks[dayIndex].points; // Add points
+                        }
+                       
+                        currentUser.lastCompletionTimestamp = Date.now(); // Update timestamp
+                        currentUser.currentDay++; // Advance day
+                        saveProgress();
+                        checkState(); // Re-check state to show next task or results
+                    } else {
+                        console.log("Developer shortcut: Already past day 30 or user not registered.");
+                        if (currentUser.currentDay > 30) {
+                            showResults();
+                        } else {
+                            showScreen('welcome');
+                        }
+                    }
+                }
+            });
+        } else {
+            console.warn("Progress bar element not found, developer shortcut will not work.");
+        }
+
 
         // --- Initial Load ---
         document.addEventListener('DOMContentLoaded', () => {
