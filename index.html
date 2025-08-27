@@ -115,6 +115,16 @@
     </div>
 
     <script>
+        // Global error handler for debugging
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error("Caught a global error:", { message, source, lineno, colno, error });
+            // You could also display a user-friendly message here
+            // alert("حدث خطأ غير متوقع. يرجى مراجعة وحدة التحكم للمزيد من التفاصيل.");
+            return true; // Prevent default error handling
+        };
+
+        console.log("Script execution started."); // Confirm script is running
+
         // --- DATA ---
         const allTasks = [
             { task: "سلم على عشرة أشخاص لا تعرفهم بابتسامة.", points: 10 }, { task: "اكتب ثلاثة أشياء تشعر بالامتنان لوجودها في حياتك.", points: 15 },
@@ -183,8 +193,7 @@
         let countdownInterval;
         
         // --- Gemini API ---
-        // !!! هام: استبدل "YOUR_GEMINI_API_KEY" بمفتاح API الخاص بك
-        const GEMINI_API_KEY = ""; // Keep this as empty string. The Canvas environment will inject the API key.
+        const GEMINI_API_KEY = "AIzaSyCGFVrYMLKKGD6n2cw_zfzDMNaM8Q0TOI8"; // Updated with provided API key
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
 
         async function callGeminiAPI(prompt) {
@@ -227,9 +236,15 @@
         // --- Core Functions ---
         const showScreen = (screenName) => {
             console.log(`Attempting to show screen: ${screenName}`);
-            Object.values(allScreens).forEach(s => s.classList.add('hidden'));
-            allScreens[screenName].classList.remove('hidden');
-            console.log(`Screen ${screenName} should be visible.`);
+            Object.values(allScreens).forEach(s => {
+                if (s) s.classList.add('hidden'); // Ensure element exists before modifying
+            });
+            if (allScreens[screenName]) { // Ensure the target screen element exists
+                allScreens[screenName].classList.remove('hidden');
+                console.log(`Screen ${screenName} should be visible.`);
+            } else {
+                console.error(`Attempted to show non-existent screen: ${screenName}`);
+            }
         };
         const saveProgress = () => localStorage.setItem('challengeProgress', JSON.stringify(currentUser));
         
@@ -245,12 +260,12 @@
                     console.error("Error parsing saved progress:", e);
                     localStorage.removeItem('challengeProgress'); // Clear corrupted data
                     showScreen('welcome');
-                    progressBar.classList.add('hidden');
+                    if (progressBar) progressBar.classList.add('hidden');
                 }
             } else {
                 console.log("No saved progress found. Showing welcome screen.");
                 showScreen('welcome');
-                progressBar.classList.add('hidden');
+                if (progressBar) progressBar.classList.add('hidden');
             }
         }
         
@@ -261,7 +276,7 @@
                 showScreen('welcome');
                 return;
             }
-            progressBar.classList.remove('hidden');
+            if (progressBar) progressBar.classList.remove('hidden');
             updateProgressBar();
 
             if (currentUser.currentDay > 30) {
@@ -319,7 +334,7 @@
 
         function startCountdown(unlockTime) {
             clearInterval(countdownInterval);
-            miniTaskDisplay.textContent = miniTasks[Math.floor(Math.random() * miniTasks.length)];
+            if (miniTaskDisplay) miniTaskDisplay.textContent = miniTasks[Math.floor(Math.random() * miniTasks.length)];
             
             countdownInterval = setInterval(() => {
                 const now = new Date();
@@ -336,11 +351,15 @@
                 const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((distance % (1000 * 60)) / 1000);
                 
-                countdownTimer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                if (countdownTimer) countdownTimer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
             }, 1000);
         }
 
         function updateProgressBar() {
+            if (!progressBar) {
+                console.warn("Progress bar element not found.");
+                return;
+            }
             progressBar.innerHTML = '';
             for (let i = 0; i < 30; i++) {
                 const circle = document.createElement('div');
@@ -359,11 +378,11 @@
             const day = currentUser.currentDay;
             const task = currentUser.challengeTasks[day - 1];
             if (task) {
-                displayUsername.textContent = currentUser.name;
-                scoreDisplay.textContent = currentUser.score;
-                dayCounter.textContent = day;
-                taskDescription.textContent = task.task;
-                taskPoints.textContent = task.points;
+                if (displayUsername) displayUsername.textContent = currentUser.name;
+                if (scoreDisplay) scoreDisplay.textContent = currentUser.score;
+                if (dayCounter) dayCounter.textContent = day;
+                if (taskDescription) taskDescription.textContent = task.task;
+                if (taskPoints) taskPoints.textContent = task.points;
             }
         }
 
@@ -386,9 +405,9 @@
         
         function showResults() {
             console.log("Showing results screen.");
-            progressBar.classList.add('hidden');
+            if (progressBar) progressBar.classList.add('hidden');
             showScreen('results');
-            finalScore.textContent = currentUser.score;
+            if (finalScore) finalScore.textContent = currentUser.score;
 
             const mockUsers = [
                 { name: 'أحمد', score: Math.floor(Math.random() * 500) + 400 },
@@ -397,38 +416,46 @@
             ];
             mockUsers.sort((a, b) => b.score - a.score);
 
-            leaderboard.innerHTML = '';
-            mockUsers.forEach((user, index) => {
-                const rank = index + 1;
-                let medal = (rank === 1) ? '🥇' : (rank === 2) ? '🥈' : (rank === 3) ? '🥉' : '';
-                const userElement = document.createElement('div');
-                userElement.className = `flex justify-between items-center p-3 rounded-lg ${user.name === currentUser.name ? 'bg-blue-800' : 'bg-gray-700'}`;
-                userElement.innerHTML = `<span class="font-bold">${medal} ${rank}. ${user.name}</span><span class="text-yellow-400">${user.score} نقطة</span>`;
-                leaderboard.appendChild(userElement);
-                
-                if(rank <= 3 && user.name === currentUser.name) {
-                    certificateSection.classList.remove('hidden');
-                    certificateSection.innerHTML = `
-                        <div id="certificate" class="bg-gray-50 text-gray-800 p-6 rounded-lg border-8 border-yellow-600 relative mt-4">
-                            <div class="text-center">
-                                <h3 class="text-4xl font-bold text-yellow-800">شهادة تقدير</h3>
-                                <p class="mt-4 text-lg">يشهد تحدي الثلاثين يومًا بأن</p>
-                                <p class="text-3xl font-bold my-4 text-blue-800">${currentUser.name}</p>
-                                <p class="text-lg">قد أتم/أتمت التحدي بنجاح وحصل/ت على المركز الـ${rank}.</p>
-                                <div class="flex justify-between items-center mt-8">
-                                    <div><p class="text-sm">تاريخ الإصدار</p><p class="font-semibold">${new Date().toLocaleDateString('ar-EG')}</p></div>
-                                    <div class="text-center"><p class="text-xl font-amiri cursive">إدارة التحدي</p><p class="text-sm border-t-2 border-gray-700">التوقيع</p></div>
+            if (leaderboard) {
+                leaderboard.innerHTML = '';
+                mockUsers.forEach((user, index) => {
+                    const rank = index + 1;
+                    let medal = (rank === 1) ? '🥇' : (rank === 2) ? '🥈' : (rank === 3) ? '🥉' : '';
+                    const userElement = document.createElement('div');
+                    userElement.className = `flex justify-between items-center p-3 rounded-lg ${user.name === currentUser.name ? 'bg-blue-800' : 'bg-gray-700'}`;
+                    userElement.innerHTML = `<span class="font-bold">${medal} ${rank}. ${user.name}</span><span class="text-yellow-400">${user.score} نقطة</span>`;
+                    leaderboard.appendChild(userElement);
+                    
+                    if(rank <= 3 && user.name === currentUser.name) {
+                        if (certificateSection) {
+                            certificateSection.classList.remove('hidden');
+                            certificateSection.innerHTML = `
+                                <div id="certificate" class="bg-gray-50 text-gray-800 p-6 rounded-lg border-8 border-yellow-600 relative mt-4">
+                                    <div class="text-center">
+                                        <h3 class="text-4xl font-bold text-yellow-800">شهادة تقدير</h3>
+                                        <p class="mt-4 text-lg">يشهد تحدي الثلاثين يومًا بأن</p>
+                                        <p class="text-3xl font-bold my-4 text-blue-800">${currentUser.name}</p>
+                                        <p class="text-lg">قد أتم/أتمت التحدي بنجاح وحصل/ت على المركز الـ${rank}.</p>
+                                        <div class="flex justify-between items-center mt-8">
+                                            <div><p class="text-sm">تاريخ الإصدار</p><p class="font-semibold">${new Date().toLocaleDateString('ar-EG')}</p></div>
+                                            <div class="text-center"><p class="text-xl font-amiri cursive">إدارة التحدي</p><p class="text-sm border-t-2 border-gray-700">التوقيع</p></div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                        <button id="print-btn" class="w-full mt-4 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg">طباعة الشهادة</button>
-                    `;
-                    document.getElementById('print-btn').addEventListener('click', () => window.print());
-                }
-            });
+                                <button id="print-btn" class="w-full mt-4 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg">طباعة الشهادة</button>
+                            `;
+                            document.getElementById('print-btn').addEventListener('click', () => window.print());
+                        }
+                    }
+                });
+            }
         }
         
         function addChatMessage(message, sender) {
+            if (!chatHistory) {
+                console.warn("Chat history element not found.");
+                return;
+            }
             const bubble = document.createElement('div');
             bubble.className = `chat-bubble p-3 rounded-lg text-white ${sender === 'user' ? 'chat-bubble-user self-end' : 'chat-bubble-bot self-start'}`;
             bubble.textContent = message;
@@ -437,47 +464,64 @@
         }
 
         // --- Event Listeners ---
-        registrationForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const name = usernameInput.value.trim();
-            if (name) {
-                const shuffledTasks = allTasks.sort(() => 0.5 - Math.random());
-                currentUser = {
-                    name: name, score: 0, currentDay: 1,
-                    challengeTasks: shuffledTasks.slice(0, 30),
-                    dayStatus: Array(30).fill('pending'),
-                    lastCompletionTimestamp: null // Reset timestamp on new challenge
-                };
-                saveProgress();
-                checkState();
-            }
-        });
+        if (registrationForm) {
+            registrationForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = usernameInput.value.trim();
+                if (name) {
+                    const shuffledTasks = allTasks.sort(() => 0.5 - Math.random());
+                    currentUser = {
+                        name: name, score: 0, currentDay: 1,
+                        challengeTasks: shuffledTasks.slice(0, 30),
+                        dayStatus: Array(30).fill('pending'),
+                        lastCompletionTimestamp: null // Reset timestamp on new challenge
+                    };
+                    saveProgress();
+                    checkState();
+                }
+            });
+        } else {
+            console.warn("Registration form element not found.");
+        }
 
-        completeBtn.addEventListener('click', () => handleCompletion(true));
-        failBtn.addEventListener('click', () => handleCompletion(false));
-        restartBtn.addEventListener('click', () => {
-            localStorage.removeItem('challengeProgress');
-            location.reload();
-        });
+        if (completeBtn) completeBtn.addEventListener('click', () => handleCompletion(true));
+        if (failBtn) failBtn.addEventListener('click', () => handleCompletion(false));
+        if (restartBtn) {
+            restartBtn.addEventListener('click', () => {
+                localStorage.removeItem('challengeProgress');
+                location.reload();
+            });
+        }
         
-        chatSend.addEventListener('click', async () => {
-            const userInput = chatInput.value.trim();
-            if (!userInput) return;
-            addChatMessage(userInput, 'user');
-            chatInput.value = '';
-            addChatMessage("...يفكر", 'bot');
-            const botResponse = await callGeminiAPI(userInput);
-            chatHistory.removeChild(chatHistory.lastChild); // Remove "thinking..."
-            addChatMessage(botResponse, 'bot');
-        });
+        if (chatSend) {
+            chatSend.addEventListener('click', async () => {
+                const userInput = chatInput.value.trim();
+                if (!userInput) return;
+                addChatMessage(userInput, 'user');
+                if (chatInput) chatInput.value = '';
+                addChatMessage("...يفكر", 'bot');
+                const botResponse = await callGeminiAPI(userInput);
+                if (chatHistory && chatHistory.lastChild) chatHistory.removeChild(chatHistory.lastChild); // Remove "thinking..."
+                addChatMessage(botResponse, 'bot');
+            });
+        }
         
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') chatSend.click();
-        });
+        if (chatInput) {
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    if (chatSend) chatSend.click();
+                }
+            });
+        }
 
         // --- Initial Load ---
-        // Wrap loadProgress in a DOMContentLoaded listener to ensure all elements exist
         document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOM content loaded.");
+            // Ensure all screens start hidden
+            Object.values(allScreens).forEach(s => {
+                if (s) s.classList.add('hidden');
+            });
+
             // Add a small delay to allow all CSS to apply before showing content
             setTimeout(loadProgress, 100); 
         });
